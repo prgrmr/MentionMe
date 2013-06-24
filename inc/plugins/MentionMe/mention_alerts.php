@@ -4,7 +4,7 @@
  *
  * This script provides MyAlerts routines for mention.php
  *
- * Copyright © 2013 Wildcard
+ * Copyright Â© 2013 Wildcard
  * http://www.rantcentralforums.com
  *
  * This program is free software: you can redistribute it and/or modify
@@ -40,7 +40,7 @@ $plugins->add_hook("datahandler_post_update", "myalerts_alert_mentioned_editpost
  */
 function myalerts_alert_mentioned_editpost($this_post)
 {
-	global $db, $mybb, $Alerts;
+	global $db, $mybb, $Alerts, $post, $cache, $fid; //PT
 
 	// Is the alerts class present?
 	require_once MYALERTS_PLUGIN_PATH . 'Alerts.class.php';
@@ -58,7 +58,7 @@ function myalerts_alert_mentioned_editpost($this_post)
 	$tid = (int) $this_post->data['tid'];
 	$pid = (int) $this_post->data['pid'];
 	$edit_uid = (int) $mybb->user['uid'];
-	$subject = $db->escape_string($post['subject']);
+	$subject = $post['subject'];
 
 	// get all mentions
 	$match = array();
@@ -69,7 +69,11 @@ function myalerts_alert_mentioned_editpost($this_post)
 	{
 		return;
 	}
-
+	
+	//PT, get forum permissions
+	$forumPerms = $cache->read('forumpermissions');
+	require_once MYBB_ROOT."inc/functions_user.php";
+	
 	// avoid duplicate mention alerts
 	$mentioned_already = array();
 
@@ -111,7 +115,11 @@ function myalerts_alert_mentioned_editpost($this_post)
 				// no duplicates
 				if(!$already_alerted)
 				{
-					$Alerts->addAlert((int) $uid, 'mention', (int) $tid, (int) $edit_uid, array('pid' => $pid, 'subject' => $subject));
+					$usergroup = get_usergroup($uid);
+					
+					if (!isset($forumPerms[$post['fid']][$usergroup]['canviewthreads']) OR (int) $forumPerms[$post['fid']][$usergroup]['canviewthreads'] != 0) {
+						$Alerts->addAlert((int) $uid, 'mention', (int) $tid, (int) $edit_uid, array('pid' => $pid, 'subject' => $subject));
+					}
 				}
 			}
 		}
@@ -127,7 +135,7 @@ $plugins->add_hook('newthread_do_newthread_end', 'myalerts_alert_mentioned');
  */
 function myalerts_alert_mentioned()
 {
-	global $mybb, $Alerts, $pid, $tid, $post, $thread;
+	global $mybb, $Alerts, $pid, $tid, $post, $thread, $cache, $fid; //PT
 
 	// If creating a new thread the message comes from POST
 	if($mybb->input['action'] == "do_newthread" && $mybb->request_method == "post")
@@ -153,6 +161,10 @@ function myalerts_alert_mentioned()
 		return;
 	}
 
+	//PT, get forum permissions
+	$forumPerms = $cache->read('forumpermissions');
+	require_once MYBB_ROOT."inc/functions_user.php";
+		
 	// avoid duplicate mention alerts
 	$mentioned_already = array();
 
@@ -168,7 +180,12 @@ function myalerts_alert_mentioned()
 			if ($mybb->user['uid'] != $uid && !$mentioned_already[$uid])
 			{
 				$mentioned_already[$uid] = true;
-				$Alerts->addAlert((int) $uid, 'mention', $tid, (int) $mybb->user['uid'], array('pid' => (int) $pid, 'subject' => $subject));
+				$usergroup = get_usergroup($uid);
+				
+				if (!isset($forumPerms[$post['fid']][$usergroup]['canviewthreads']) OR (int) $forumPerms[$post['fid']][$usergroup]['canviewthreads'] != 0) {
+					$Alerts->addAlert((int) $uid, 'mention', $tid, (int) $mybb->user['uid'], array('pid' => (int) $pid, 'subject' => $subject));
+				}
+				
 			}
 		}
 	}
@@ -321,6 +338,36 @@ function mention_find_in_post($message, &$match)
 	// match all the mentions in this post
 	$pattern = '#@<a id="mention_(.*?)"#is';
 	preg_match_all($pattern, $message, $match, PREG_SET_ORDER);
+}
+
+/**
+ * Gets the usergroup for a specific uid.
+ *
+ * @param int The uid of the user to get the usertitle of.
+ * @return string The usergroup of the user.
+ */
+function get_usergroup($uid="")
+{
+	global $db, $mybb;
+
+	if($mybb->user['uid'] == $uid)
+	{
+		$user = $mybb->user;
+	}
+	else
+	{
+		$query = $db->simple_select("users", "usergroup", "uid='$uid'", array('limit' => 1));
+		$user = $db->fetch_array($query);
+	}
+
+	if($user['usergroup'])
+	{
+		return $user['usergroup'];
+	}
+	else
+	{
+		return 0;
+	}
 }
 
 ?>
