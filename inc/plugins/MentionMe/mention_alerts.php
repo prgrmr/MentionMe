@@ -366,7 +366,7 @@ function get_usergroup($uid="")
 	}
 	else
 	{
-		return 0;
+		return 1;  //Default to guest group
 	}
 }
 
